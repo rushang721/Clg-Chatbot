@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin | Campus Saathi</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF1F6;--panel:#fff;--ink:#16213E;--muted:#6B7690;--line:#DDE3EE;--accent:#F2A33A;--teal:#0E7C7B;--red:#C93C3C}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+.hide{display:none!important}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px}
+.login .card{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+h1{font-size:20px;font-weight:800}h2{font-size:16px;font-weight:800;margin-bottom:12px}
+label{font-size:12px;color:var(--muted);font-weight:700}
+input,textarea,select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--ink);background:#fff;outline:none;margin-top:4px}
+input:focus,textarea:focus{border-color:var(--accent)}
+textarea{min-height:80px;resize:vertical}
+.btn{border:0;border-radius:10px;padding:10px 16px;font-family:inherit;font-weight:800;font-size:13px;cursor:pointer;background:var(--ink);color:#fff}
+.btn.accent{background:var(--accent);color:#1A1204}.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}.btn.red{background:var(--red)}
+.btn.sm{padding:6px 10px;font-size:12px}
+.err{color:var(--red);font-size:13px;min-height:16px}
+.top{background:var(--ink);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:5}
+.top b{font-size:16px}.top .sp{flex:1}
+nav{display:flex;gap:6px;padding:12px 16px 0;overflow-x:auto}
+nav button{border:0;background:transparent;padding:9px 14px;border-radius:10px;font-family:inherit;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
+nav button.on{background:var(--panel);color:var(--ink);box-shadow:0 0 0 1.5px var(--line)}
+main{padding:14px 16px 40px;max-width:900px;margin:auto}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+@media(min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat b{display:block;font-size:26px;font-weight:800}.stat span{color:var(--muted);font-size:12px}
+.bars{display:flex;align-items:flex-end;gap:10px;height:140px;padding-top:10px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px;font-size:11px;color:var(--muted)}
+.bar i{display:block;width:100%;background:var(--teal);border-radius:6px 6px 0 0;min-height:3px}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+.item .q{font-weight:800;margin-bottom:4px}.item .a{color:var(--muted);line-height:1.5;white-space:pre-wrap}
+.tag{display:inline-block;background:var(--bg);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--muted);margin-right:6px}
+.acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.grid2{display:grid;gap:10px}@media(min-width:640px){.grid2{grid-template-columns:1fr 1fr}}
+.empty{text-align:center;color:var(--muted);padding:30px}
+</style>
+</head>
+<body>
+
+<div class="login" id="loginBox">
+  <div class="card">
+    <h1>Admin login</h1>
+    <div><label>Email</label><input id="email" type="email" autocomplete="username"></div>
+    <div><label>Password</label><input id="pass" type="password" autocomplete="current-password"></div>
+    <div class="err" id="lerr"></div>
+    <button class="btn accent" id="loginBtn">Log in</button>
+  </div>
+</div>
+
+<div id="app" class="hide">
+  <div class="top"><b>Campus Saathi Admin</b><span class="sp"></span><a href="/" style="color:#fff;font-size:13px">Open chatbot</a><button class="btn ghost sm" style="color:#fff;border-color:#4a5578" id="logout">Log out</button></div>
+  <nav id="tabs">
+    <button data-t="dash" class="on">Dashboard</button>
+    <button data-t="faqs">FAQs</button>
+    <button data-t="un">Unanswered</button>
+    <button data-t="chats">Chats</button>
+  </nav>
+  <main id="view"></main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let token = localStorage.getItem('tok');
+let tab = 'dash', faqs = [], editing = null;
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/api/admin' + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (r.status === 401) { logout(); throw new Error('auth'); }
+  return r.json();
+}
+
+function logout() { localStorage.removeItem('tok'); token = null; $('#app').classList.add('hide'); $('#loginBox').classList.remove('hide'); }
+function enter() { $('#loginBox').classList.add('hide'); $('#app').classList.remove('hide'); render(); }
+
+$('#loginBtn').onclick = async () => {
+  $('#lerr').textContent = '';
+  const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: $('#email').value, password: $('#pass').value }) });
+  const d = await r.json();
+  if (d.token) { token = d.token; localStorage.setItem('tok', token); enter(); }
+  else $('#lerr').textContent = d.error || 'Login failed';
+};
+$('#logout').onclick = logout;
+$('#tabs').onclick = e => {
+  const t = e.target.dataset.t; if (!t) return;
+  tab = t; editing = null;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  render();
+};
+
+async function render() {
+  const v = $('#view');
+  v.innerHTML = '<div class="empty">Loading...</div>';
+  try {
+    if (tab === 'dash') await dash(v);
+    if (tab === 'faqs') await faqView(v);
+    if (tab === 'un') await unView(v);
+    if (tab === 'chats') await chatView(v);
+  } catch (e) { if (e.message !== 'auth') v.innerHTML = '<div class="empty">Something went wrong. Refresh the page.</div>'; }
+}
+
+async function dash(v) {
+  const s = await api('/stats');
+  const max = Math.max(1, ...s.perDay.map(d => d.n));
+  v.innerHTML = `
+    <div class="stats">
+      <div class="stat"><b>${s.chats}</b><span>Total questions</span></div>
+      <div class="stat"><b>${s.faqs}</b><span>FAQs in bot</span></div>
+      <div class="stat"><b>${s.open}</b><span>Unanswered</span></div>
+      <div class="stat"><b>${s.likes}/${s.dislikes}</b><span>Helpful / Not helpful</span></div>
+    </div>
+    <div class="card"><h2>Questions in the last 7 days</h2>
+      ${s.perDay.length ? `<div class="bars">${s.perDay.map(d => `<div class="bar">${d.n}<i style="height:${(d.n / max) * 100}%"></i>${esc(d._id.slice(5))}</div>`).join('')}</div>` : '<div class="empty">No chats yet.</div>'}
+    </div>`;
+}
+
+async function faqView(v) {
+  faqs = await api('/faqs');
+  const e = editing === 'new' ? {} : (faqs.find(f => f._id === editing) || null);
+  v.innerHTML = `
+    ${editing ? `<div class="card" style="margin-bottom:14px"><h2>${editing === 'new' ? 'Add FAQ' : 'Edit FAQ'}</h2>
+      <label>Question</label><input id="fq" value="${esc(e?.question)}">
+      <div style="height:8px"></div><label>Answer</label><textarea id="fa">${esc(e?.answer)}</textarea>
+      <div class="grid2" style="margin-top:8px"><div><label>Category</label><input id="fc" value="${esc(e?.category || 'General')}"></div>
+      <div><label>Keywords (comma separated)</label><input id="fk" value="${esc((e?.keywords || []).join(', '))}"></div></div>
+      <div class="acts"><button class="btn accent" id="saveFaq">Save FAQ</button><button class="btn ghost" id="cancelFaq">Cancel</button></div></div>`
+    : '<button class="btn accent" id="addFaq" style="margin-bottom:14px">+ Add FAQ</button>'}
+    ${faqs.length ? faqs.map(f => `<div class="item"><div class="q">${esc(f.question)}</div><div class="a">${esc(f.answer)}</div>
+      <div style="margin-top:8px"><span class="tag">${esc(f.category)}</span><span class="tag">${f.hits} uses</span></div>
+      <div class="acts"><button class="btn ghost sm" data-edit="${f._id}">Edit</button><button class="btn red sm" data-del="${f._id}">Delete</button></div></div>`).join('')
+      : '<div class="empty">No FAQs yet. Add your first one.</div>'}`;
+  const add = $('#addFaq'); if (add) add.onclick = () => { editing = 'new'; render(); };
+  const cancel = $('#cancelFaq'); if (cancel) cancel.onclick = () => { editing = null; render(); };
+  const save = $('#saveFaq');
+  if (save) save.onclick = async () => {
+    const body = { question: $('#fq').value.trim(), answer: $('#fa').value.trim(), category: $('#fc').value.trim(), keywords: $('#fk').value };
+    if (!body.question || !body.answer) return alert('Question and answer are required');
+    await api(editing === 'new' ? '/faqs' : '/faqs/' + editing, editing === 'new' ? 'POST' : 'PUT', body);
+    editing = null; render();
+  };
+  v.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { editing = b.dataset.edit; render(); window.scrollTo(0, 0); });
+  v.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Delete this FAQ?')) { await api('/faqs/' + b.dataset.del, 'DELETE'); render(); } });
+}
+
+async function unView(v) {
+  const list = await api('/unanswered');
+  v.innerHTML = list.length ? list.map(u => `<div class="item"><div class="q">${esc(u.question)}</div>
+    <textarea placeholder="Type the answer to add it as a FAQ" data-ans="${u._id}"></textarea>
+    <div class="acts"><button class="btn accent sm" data-add="${u._id}">Answer and add FAQ</button><button class="btn ghost sm" data-rm="${u._id}">Dismiss</button></div></div>`).join('')
+    : '<div class="empty">Nothing waiting. Every question has been answered.</div>';
+  v.querySelectorAll('[data-add]').forEach(b => b.onclick = async () => {
+    const answer = v.querySelector(`[data-ans="${b.dataset.add}"]`).value.trim();
+    if (!answer) return alert('Write an answer first');
+    await api('/unanswered/' + b.dataset.add + '/answer', 'POST', { answer }); render();
+  });
+  v.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => { await api('/unanswered/' + b.dataset.rm, 'DELETE'); render(); });
+}
+
+async function chatView(v) {
+  const list = await api('/chats');
+  v.innerHTML = list.length ? list.map(c => `<div class="item"><div class="q">${esc(c.question)}</div><div class="a">${esc(c.answer)}</div>
+    <div style="margin-top:8px"><span class="tag">${esc(c.source)}</span><span class="tag">${c.feedback === 1 ? 'Helpful' : c.feedback === -1 ? 'Not helpful' : 'No feedback'}</span><span class="tag">${new Date(c.createdAt).toLocaleString()}</span></div></div>`).join('')
+    : '<div class="empty">No chats yet.</div>';
+}
+
+if (token) enter();
+</script>
+</body>
+</html>
